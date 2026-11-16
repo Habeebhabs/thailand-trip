@@ -312,7 +312,7 @@ const MGEO=Object.fromEntries(Object.entries({
 }).map(([k,v])=>[k,v.split(' ').map(p=>p.split(',').map(n=>n/1e4))]));
 const MAPS={
  day1:[{title:'Friday evening in Pattaya',stay:'glow',pins:['view','thep','walkst'],far:['resort']}],
- day2:[{title:'Morning: Pattaya and Koh Larn',stay:'glow',pins:['bali','tawaen'],far:[]},{title:'Evening: Bangkok Chinatown',stay:'phet',pins:['yaowarat','nana'],far:[]}],
+ day2:[{title:'Morning: Pattaya and Koh Larn',stay:'glow',pins:['bali','tawaen'],far:[],gm:{pts:['glow','tawaen'],mode:'transit'}},{title:'Evening: Bangkok Chinatown',stay:'phet',pins:['yaowarat','nana'],far:[]}],
  day3:[{title:'Sunday across Bangkok',stay:'phet',pins:['jj','jodd'],group:['sanam','palace','watpho','thatien','watarun','itsara'],far:['bkk']},{title:'Old town on foot',from:'phet',pins:['sanam','palace','watpho','thatien','watarun','itsara'],far:[]}]
 };
 const PINSVG='<svg class="pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
@@ -336,20 +336,22 @@ function dayMap(d){
 }
 /* Real Google Maps on the hosted page; the drawn map stays as the fallback where frames are blocked. */
 const GMAPS=/(^|\.)github\.io$/.test(location.hostname)||location.hostname==='localhost'||location.protocol==='file:';
+const gmode=sp=>sp.gm?sp.gm.mode:sp.stay?'driving':'walking';
 function gmapPts(sp,seq){
+ if(sp.gm)return sp.gm.pts.map(k=>MC[k][0]+','+MC[k][1]);
  const keep=new Set([...(sp.stay?[sp.stay]:[]),...sp.pins,...(sp.stay?(sp.group||[]).filter(k=>['palace','watpho','watarun'].includes(k)):[])]);
  const pts=[];seq.forEach(k=>{if(keep.has(k)&&pts[pts.length-1]!==k)pts.push(k)});
  return pts.length<2?[]:pts.map(k=>MC[k][0]+','+MC[k][1]);
 }
 function gmapOpen(sp,seq){
  const pts=gmapPts(sp,seq);if(!pts.length)return '';
- return 'https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+pts.slice(1,-1).join('%7C'):'')+'&travelmode='+(sp.stay?'driving':'walking');
+ return 'https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+pts.slice(1,-1).join('%7C'):'')+'&travelmode='+gmode(sp);
 }
 function gmapUrl(sp,seq){
  if(!GMAPS)return '';
  const pts=gmapPts(sp,seq);if(!pts.length)return '';
  const c=x=>x;
- return 'https://maps.google.com/maps?saddr='+c(pts[0])+'&daddr='+pts.slice(1).map(c).join('+to:')+(sp.stay?'':'&dirflg=w')+'&output=embed';
+ return 'https://maps.google.com/maps?saddr='+c(pts[0])+'&daddr='+pts.slice(1).map(c).join('+to:')+({driving:'',walking:'&dirflg=w',transit:'&dirflg=r'}[gmode(sp)])+'&output=embed';
 }
 function mapPanel(sp,seq,num,legs){
  const has=k=>seq.includes(k);
@@ -417,7 +419,7 @@ function mapPanel(sp,seq,num,legs){
  const lineKey=['drive','mrt','walk','ferry'].filter(m=>used.has(m)).map(m=>`<span><svg viewBox="0 0 30 8" aria-hidden="true"><line class="m-${m}" x1="2" y1="4" x2="28" y2="4"/></svg>${modeName[m]}</span>`).join('');
  const note=sp.stay?'Distances are by road from '+(sp.stay==='glow'?'GLOW Pattaya':'MRT Phetchaburi')+', along the fastest driving route.':'Distances are by road from MRT Phetchaburi. You reach these stops by MRT, on foot and by ferry.';
  const gm=gmapUrl(sp,seq),gopen=gmapOpen(sp,seq);
- return `<figure><figcaption>${esc(sp.title)}</figcaption>${gm?`<iframe class="gmap" src="${esc(gm)}" title="${esc(sp.title)}: Google Maps route" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>`:`<svg viewBox="0 0 ${W} ${Math.round(H)}" role="img" aria-label="${esc(sp.title)}: schematic route map with numbered stops">${lines}${pinSvg}${scale}${farSvg}<text class="m-small" x="12" y="16">N ↑</text></svg><div class="map-lines">${lineKey}</div>`}${gopen?`<div class="route-btns map-open"><a class="action" href="${esc(gopen)}" target="_blank" rel="noopener">${PINSVG}Open in Google Maps ↗</a></div>`:''}<ol class="map-key">${key}</ol><p class="fine">${note} ${gm?(sp.stay?'Google shows the stops in order as a driving route; MRT and ferry legs will differ.':'Google shows the stops in order as a walking route.')+' Drag and zoom the map, or use Open in Google Maps below.':'MRT, walking and ferry legs are drawn as straight lines.'}</p></figure>`;
+ return `<figure><figcaption>${esc(sp.title)}</figcaption>${gm?`<iframe class="gmap" src="${esc(gm)}" title="${esc(sp.title)}: Google Maps route" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>`:`<svg viewBox="0 0 ${W} ${Math.round(H)}" role="img" aria-label="${esc(sp.title)}: schematic route map with numbered stops">${lines}${pinSvg}${scale}${farSvg}<text class="m-small" x="12" y="16">N ↑</text></svg><div class="map-lines">${lineKey}</div>`}${gopen?`<div class="route-btns map-open"><a class="action" href="${esc(gopen)}" target="_blank" rel="noopener">${PINSVG}Open in Google Maps ↗</a></div>`:''}<ol class="map-key">${key}</ol><p class="fine">${note} ${gm?({driving:'Google shows the stops in order as a driving route; MRT and ferry legs will differ.',walking:'Google shows the stops in order as a walking route.',transit:'Google shows the trip from GLOW Pattaya to Tawaen Beach by public ferry via Bali Hai Pier; ferry times shown are Google’s, so check the pier board.'}[gmode(sp)])+' Drag and zoom the map, or use Open in Google Maps below.':'MRT, walking and ferry legs are drawn as straight lines.'}</p></figure>`;
 }
 const WM='https://thumb.wikimedia.org/wikipedia/commons/thumb/',WF='https://commons.wikimedia.org/wiki/File:',BY2=['CC BY 2.0','https://creativecommons.org/licenses/by/2.0'],SA4=['CC BY-SA 4.0','https://creativecommons.org/licenses/by-sa/4.0'];
 const wm=(path,file,w,h,credit,lic,caption)=>[{src:WM+path,source:WF+file,credit:credit+' / Wikimedia Commons',license:lic[0],licenseUrl:lic[1],width:w,height:h,caption}];
