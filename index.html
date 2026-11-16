@@ -186,6 +186,7 @@ table.tt td{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
 .photo-unavailable .photo-zoom{position:static;display:inline-block;margin:28px 12px}.photo-unavailable{cursor:default}.route-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:4px 0 18px}.route-btns a.action{text-decoration:none;display:inline-flex;align-items:center;gap:6px}.route-btns .pin{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.route-btns .fine{flex-basis:100%;margin:0}.dist{display:flex;align-items:flex-start;gap:6px;margin:10px 0 0;font-size:13px;color:var(--muted)}.dist .pin{width:15px;height:15px;flex:none;margin-top:2px;fill:none;stroke:var(--sea);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .daymap{margin:4px 0 20px;display:grid;gap:12px}.daymap .subheading{margin:6px 0 0}.daymap figure{margin:0;max-width:600px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.daymap iframe.gmap{display:block;width:100%;height:360px;border:0;border-radius:10px;background:var(--sea-soft)}
 .daymap figcaption{font:700 16px/1.2 var(--display);margin:0 0 10px}.daymap figure>svg{display:block;width:100%;height:auto;border-radius:10px;background:var(--sea-soft)}
 .m-case{fill:none;stroke:var(--surface);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}.m-drive{fill:none;stroke:var(--sea);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .m-mrt{fill:none;stroke:var(--gold);stroke-width:3;stroke-dasharray:9 6}.m-ferry{fill:none;stroke:var(--sea);stroke-width:3.5;stroke-dasharray:.5 7;stroke-linecap:round}.m-walk{fill:none;stroke:var(--muted);stroke-width:2.5;stroke-dasharray:4 4}
@@ -332,6 +333,16 @@ function dayMap(d){
  for(let i=1;i<seq.length;i++){const a=seq[i-1],b=seq[i];if(a==='tawaen'&&b==='glow')legs.push(['tawaen','bali'],['bali','glow']);else legs.push([a,b])}
  return `<section class="daymap" aria-label="Route maps for ${esc(d.tab)}"><h3 class="subheading">Route map</h3>${MAPS[d.id].map(sp=>mapPanel(sp,seq,num,legs)).join('')}</section>`;
 }
+/* Real Google Maps on the hosted page; the drawn map stays as the fallback where frames are blocked. */
+const GMAPS=/(^|\.)github\.io$/.test(location.hostname)||location.hostname==='localhost'||location.protocol==='file:';
+function gmapUrl(sp,seq){
+ if(!GMAPS)return '';
+ const keep=new Set([...(sp.stay?[sp.stay]:[]),...sp.pins,...(sp.stay?(sp.group||[]).filter(k=>['palace','watpho','watarun'].includes(k)):[])]);
+ const pts=[];seq.forEach(k=>{if(keep.has(k)&&pts[pts.length-1]!==k)pts.push(k)});
+ if(pts.length<2)return '';
+ const c=k=>MC[k][0]+','+MC[k][1];
+ return 'https://maps.google.com/maps?saddr='+c(pts[0])+'&daddr='+pts.slice(1).map(c).join('+to:')+(sp.stay?'':'&dirflg=w')+'&output=embed';
+}
 function mapPanel(sp,seq,num,legs){
  const has=k=>seq.includes(k);
  const pins=sp.pins.filter(has),grp=(sp.group||[]).filter(has),far=sp.far.filter(has),from=sp.stay||sp.from;
@@ -397,7 +408,8 @@ function mapPanel(sp,seq,num,legs){
  const modeName={drive:'Road',mrt:'MRT',ferry:'Ferry',walk:'Walk'};
  const lineKey=['drive','mrt','walk','ferry'].filter(m=>used.has(m)).map(m=>`<span><svg viewBox="0 0 30 8" aria-hidden="true"><line class="m-${m}" x1="2" y1="4" x2="28" y2="4"/></svg>${modeName[m]}</span>`).join('');
  const note=sp.stay?'Distances are by road from '+(sp.stay==='glow'?'GLOW Pattaya':'MRT Phetchaburi')+', along the fastest driving route.':'Distances are by road from MRT Phetchaburi. You reach these stops by MRT, on foot and by ferry.';
- return `<figure><figcaption>${esc(sp.title)}</figcaption><svg viewBox="0 0 ${W} ${Math.round(H)}" role="img" aria-label="${esc(sp.title)}: schematic route map with numbered stops">${lines}${pinSvg}${scale}${farSvg}<text class="m-small" x="12" y="16">N ↑</text></svg><div class="map-lines">${lineKey}</div><ol class="map-key">${key}</ol><p class="fine">${note} MRT, walking and ferry legs are drawn as straight lines.</p></figure>`;
+ const gm=gmapUrl(sp,seq);
+ return `<figure><figcaption>${esc(sp.title)}</figcaption>${gm?`<iframe class="gmap" src="${esc(gm)}" title="${esc(sp.title)}: Google Maps route" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>`:`<svg viewBox="0 0 ${W} ${Math.round(H)}" role="img" aria-label="${esc(sp.title)}: schematic route map with numbered stops">${lines}${pinSvg}${scale}${farSvg}<text class="m-small" x="12" y="16">N ↑</text></svg><div class="map-lines">${lineKey}</div>`}<ol class="map-key">${key}</ol><p class="fine">${note} ${gm?(sp.stay?'Google shows the stops in order as a driving route; MRT and ferry legs will differ.':'Google shows the stops in order as a walking route.')+' Drag and zoom the map, or tap More options to open Google Maps.':'MRT, walking and ferry legs are drawn as straight lines.'}</p></figure>`;
 }
 const WM='https://thumb.wikimedia.org/wikipedia/commons/thumb/',WF='https://commons.wikimedia.org/wiki/File:',BY2=['CC BY 2.0','https://creativecommons.org/licenses/by/2.0'],SA4=['CC BY-SA 4.0','https://creativecommons.org/licenses/by-sa/4.0'];
 const wm=(path,file,w,h,credit,lic,caption)=>[{src:WM+path,source:WF+file,credit:credit+' / Wikimedia Commons',license:lic[0],licenseUrl:lic[1],width:w,height:h,caption}];
